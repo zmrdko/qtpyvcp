@@ -46,64 +46,95 @@ class PointsSurfaceActor(vtkActor):
         self.log = LOG
         self._datasource = datasource
 
-        self.probe_results = [[0.0]]
-        self.mesh_z_offset = 0.0
+        self.probe_results = []
+        self.mesh_x_offset = getSetting("backplot.mesh-x-offset").value  # Initialize mesh_x_offset
+        self.mesh_y_offset = getSetting("backplot.mesh-y-offset").value  # Initialize mesh_y_offset
+        self.mesh_z_offset = getSetting("backplot.mesh-z-offset").value  # Initialize mesh_z_offset
 
         self.axis = self._datasource.getAxis()
         # show_surface = getSetting('backplot.show-points-surface')
         # self.showSurface(show_surface and show_surface.value)
 
-        self.probe_results = [
-            [0.000000, -0.000000, -0.380763, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [1.000000, 0.000000, 3.533403, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [2.000000, 0.000000, 4.215070, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [3.000000, 0.000000, 4.024237, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [3.000000, 1.000000, 4.510903, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [2.000000, 1.000000, 4.621737, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [1.000000, 1.000000, 4.764237, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [0.000000, 1.000000, 4.740070, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [0.000000, 2.000000, 4.830070, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [1.000000, 2.000000, 5.090903, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [2.000000, 2.000000, 4.716737, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [3.000000, 2.000000, 4.947570, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [000000, 3.000000, 4.980903, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [2.000000, 3.000000, 4.829237, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [1.000000, 3.000000, 5.010903, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000],
-            [0.000000, 3.000000, 4.858403, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000]
-        ]
+    def load_probe_results(self, filename):
+        """Reads probe results from a text file and parses them into a list of X, Y, Z values."""
+        try:
+            with open(filename, 'r') as file:
+                line_count = 0
+                total_lines = sum(1 for line in file)  # Count total lines
+                file.seek(0)  # Reset file pointer to the beginning
 
+                print(f"Total lines in file: {total_lines}")
+
+                for line in file:
+                    line_count += 1
+                    # Print the raw line to debug
+                    print(f"Raw line {line_count}: '{line.strip()}'")
+
+                    # Strip any leading/trailing whitespace and split by spaces
+                    row = list(map(float, line.strip().split()))
+                    
+                    # Check the parsed row length
+                    if len(row) == 3:
+                        self.probe_results.append(row)
+                    else:
+                        self.log.warning(f"Invalid data format in line {line_count}: {line.strip()}")
+
+            if not self.probe_results:
+                self.log.warning("No valid data found in the probe-results.txt file.")
+            else:
+                self.log.info(f"Loaded {len(self.probe_results)} points from {filename}.")
+                # Output the parsed results to verify them
+                print("Parsed probe results:")
+                for point in self.probe_results:
+                    print(point)  # Each point is a list of [X, Y, Z]
+
+        except FileNotFoundError:
+            self.log.error(f"File {filename} not found.")
+        except ValueError as e:
+            self.log.error(f"Error parsing {filename}: {e}")
 
     def showSurface(self, show_surface):
 
         if show_surface:
             self.log.info("SHOW POINTS SURFACE ")
-            # Define the size of the grid (number of points in X and Y directions)
+            self.load_probe_results('probe-results.txt')
 
-            self.mesh_x_offset = getSetting("backplot.mesh-x-offset")
-            self.mesh_y_offset = getSetting("backplot.mesh-y-offset")
-            self.mesh_z_offset = getSetting("backplot.mesh-z-offset")
+            # Check if probe_results is not empty
+            if not self.probe_results:
+                self.log.error("No probe results available to show.")
+                return
+            
+            # Ensure probe_results is structured correctly
+            # Transform the probe results to a structured 2D array
+            structured_results = np.array(self.probe_results)
+            
+            num_points_x = structured_results.shape[0]
+            num_points_y = structured_results.shape[1]
 
-            # Define the size of the grid (number of points in X and Y directions)
-            num_points_x = len(self.probe_results)
-            num_points_y = len(self.probe_results[0])
+            # Log the sizes
+            self.log.info(f"Number of points in X: {num_points_x}, Y: {num_points_y}")
 
-            print(num_points_x, num_points_y)
+            # Extract X, Y, Z coordinates
+            x_coords = structured_results[:, 0]
+            y_coords = structured_results[:, 1]
+            z_coords = structured_results[:, 2]
 
-            # Define the original range of X and Y coordinates
-            x_range = np.linspace(0, 1, num_points_x)
-            y_range = np.linspace(0, 1, num_points_y)
+            x_min, x_max = x_coords.min(), x_coords.max()
+            y_min, y_max = y_coords.min(), y_coords.max()
+
+            # Create a grid of X and Y based on the actual coordinates
+            x_range = np.linspace(x_min, x_max, num_points_x)
+            y_range = np.linspace(y_min, y_max, num_points_y)
 
             # Initialize the points array
             points_array = np.zeros((num_points_x * num_points_y, 3))
 
             # Generate the points with elevation and translated coordinates
-            for i, x in enumerate(x_range):
-                for j, y in enumerate(y_range):
-                    # Calculate the Z-coordinate (elevation) using a simple function
-                    z = self.probe_results[i][j]
-                    points_array[i * num_points_y + j] = [x_range[i], y_range[j], z]
+            for idx, (x, y, z) in enumerate(structured_results):
+                points_array[idx] = [x, y, z]
 
-            # Print the points array
+            # Print the points array for verification
+            print("Points Array:")
             print(points_array)
 
             # Create a vtkPoints object and add the points
@@ -120,21 +151,13 @@ class PointsSurfaceActor(vtkActor):
             delaunay.SetInputData(polydata)
             delaunay.Update()
 
-            x_offset = self.mesh_x_offset.value
-            y_offset = self.mesh_y_offset.value
-            z_offset = self.mesh_z_offset.value
+            # Apply mesh transformations
+            x_offset = self.mesh_x_offset+(x_max-x_min)/2
+            y_offset = self.mesh_y_offset+(y_max-y_min)/2
+            z_offset = self.mesh_z_offset
 
             mesh_transform = vtkTransform()
             mesh_transform.Translate(x_offset, y_offset, z_offset)
-
-            # Smooth the mesh using vtkSmoothPolyDataFilter
-            # smooth_filter = vtkSmoothPolyDataFilter()
-            # smooth_filter.SetInputConnection(delaunay.GetOutputPort())
-            # smooth_filter.SetNumberOfIterations(50)  # Number of smoothing iterations
-            # smooth_filter.SetRelaxationFactor(0.1)  # Relaxation factor
-            # smooth_filter.FeatureEdgeSmoothingOff()
-            # smooth_filter.BoundarySmoothingOff()
-            # smooth_filter.Update()
 
             # Create a mapper and set the input connection
             mapper = vtkPolyDataMapper()
@@ -146,6 +169,8 @@ class PointsSurfaceActor(vtkActor):
 
         else:
             self.log.info("HIDE POINTS SURFACE ")
+
+
 
     # def run(self):
     #         self.view.GetInteractor().Start()
