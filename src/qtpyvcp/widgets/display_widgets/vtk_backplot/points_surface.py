@@ -31,6 +31,12 @@ from vtkmodules.vtkCommonDataModel import (
 from vtkmodules.vtkRenderingContext2D import vtkContextMouseEvent
 from vtkmodules.vtkViewsContext2D import vtkContextView
 
+from vtkmodules.vtkFiltersCore import vtkSmoothPolyDataFilter
+from vtkmodules.vtkFiltersModeling import vtkLoopSubdivisionFilter
+from vtkmodules.vtkCommonCore import vtkLookupTable, vtkFloatArray
+from vtkmodules.vtkRenderingCore import vtkPolyDataMapper
+
+
 from qtpyvcp.utilities import logger
 
 # from qtpyvcp.widgets.display_widgets.vtk_backplot.linuxcnc_datasource import LinuxCncDataSource
@@ -47,46 +53,58 @@ class PointsSurfaceActor(vtkActor):
         self._datasource = datasource
 
         self.probe_results = []
-        self.mesh_x_offset = getSetting("backplot.mesh-x-offset").value  # Initialize mesh_x_offset
-        self.mesh_y_offset = getSetting("backplot.mesh-y-offset").value  # Initialize mesh_y_offset
-        self.mesh_z_offset = getSetting("backplot.mesh-z-offset").value  # Initialize mesh_z_offset
-
-        self.axis = self._datasource.getAxis()
+        # self.axis = self._datasource.getAxis()
         # show_surface = getSetting('backplot.show-points-surface')
         # self.showSurface(show_surface and show_surface.value)
 
     def load_probe_results(self, filename):
-        """Reads probe results from a text file and parses them into a list of X, Y, Z values."""
+        """Reads probe results from a text file and parses them into a list of X, Y, Z values.
+        The first line should contain the current work coordinate offsets in the format: 'WCO X Y Z'."""
+        if not os.path.exists(filename):
+            self.log.error(f"File {filename} not found.")
+            return  # Exit the method if the file doesn't exist
+
         try:
             with open(filename, 'r') as file:
-                line_count = 0
-                total_lines = sum(1 for line in file)  # Count total lines
-                file.seek(0)  # Reset file pointer to the beginning
+                # Read the first line for offsets
+                offsets_line = file.readline().strip()
+                try:
+                    # Split the line and extract values after 'WCO'
+                    parts = offsets_line.split()
+                    if parts[0] == "WCO" and len(parts) == 4:
+                        # Convert the offset values to floats
+                        self.mesh_x_offset = float(parts[1])
+                        self.mesh_y_offset = float(parts[2])
+                        self.mesh_z_offset = float(parts[3])
+                        self.log.info(f"Loaded offsets: X={self.mesh_x_offset}, Y={self.mesh_y_offset}, Z={self.mesh_z_offset}")
+                    else:
+                        self.log.warning("Invalid format for offsets; expected 'WCO X Y Z'.")
+                        return
+                except ValueError as e:
+                    self.log.error(f"Error parsing offsets: {e}")
+                    return
 
-                print(f"Total lines in file: {total_lines}")
+                # Read the remaining lines for probe results
+                line_count = 1  # Start counting lines from 1 since we've read the first line
+                self.probe_results = []  # Reset the results
 
                 for line in file:
                     line_count += 1
-                    # Print the raw line to debug
                     print(f"Raw line {line_count}: '{line.strip()}'")
 
-                    # Strip any leading/trailing whitespace and split by spaces
                     row = list(map(float, line.strip().split()))
-                    
-                    # Check the parsed row length
                     if len(row) == 3:
                         self.probe_results.append(row)
                     else:
                         self.log.warning(f"Invalid data format in line {line_count}: {line.strip()}")
 
-            if not self.probe_results:
-                self.log.warning("No valid data found in the probe-results.txt file.")
-            else:
-                self.log.info(f"Loaded {len(self.probe_results)} points from {filename}.")
-                # Output the parsed results to verify them
-                print("Parsed probe results:")
-                for point in self.probe_results:
-                    print(point)  # Each point is a list of [X, Y, Z]
+                if not self.probe_results:
+                    self.log.warning("No valid data found in the probe-results.txt file.")
+                else:
+                    self.log.info(f"Loaded {len(self.probe_results)} points from {filename}.")
+                    print("Parsed probe results:")
+                    for point in self.probe_results:
+                        print(point)
 
         except FileNotFoundError:
             self.log.error(f"File {filename} not found.")
@@ -96,23 +114,18 @@ class PointsSurfaceActor(vtkActor):
     def showSurface(self, show_surface):
 
         if show_surface:
-            self.log.info("SHOW POINTS SURFACE ")
+            self.log.info("SHOW POINTS SURFACE")
             self.load_probe_results('probe-results.txt')
 
             # Check if probe_results is not empty
             if not self.probe_results:
                 self.log.error("No probe results available to show.")
                 return
-            
-            # Ensure probe_results is structured correctly
+
             # Transform the probe results to a structured 2D array
             structured_results = np.array(self.probe_results)
-            
-            num_points_x = structured_results.shape[0]
-            num_points_y = structured_results.shape[1]
 
-            # Log the sizes
-            self.log.info(f"Number of points in X: {num_points_x}, Y: {num_points_y}")
+            num_points_x = structured_results.shape[0]
 
             # Extract X, Y, Z coordinates
             x_coords = structured_results[:, 0]
@@ -122,53 +135,75 @@ class PointsSurfaceActor(vtkActor):
             x_min, x_max = x_coords.min(), x_coords.max()
             y_min, y_max = y_coords.min(), y_coords.max()
 
-            # Create a grid of X and Y based on the actual coordinates
-            x_range = np.linspace(x_min, x_max, num_points_x)
-            y_range = np.linspace(y_min, y_max, num_points_y)
-
-            # Initialize the points array
-            points_array = np.zeros((num_points_x * num_points_y, 3))
-
-            # Generate the points with elevation and translated coordinates
-            for idx, (x, y, z) in enumerate(structured_results):
-                points_array[idx] = [x, y, z]
-
-            # Print the points array for verification
-            print("Points Array:")
-            print(points_array)
-
             # Create a vtkPoints object and add the points
             vtk_points = vtkPoints()
-            for point in points_array:
+            for point in structured_results:
                 vtk_points.InsertNextPoint(point)
 
             # Create a vtkPolyData object and set the points
             polydata = vtkPolyData()
             polydata.SetPoints(vtk_points)
 
+            # **Assign Z-values as scalar data** for coloring
+            z_scalars = vtkFloatArray()
+            z_scalars.SetName("Z-Scalars")
+            for z in z_coords:
+                z_scalars.InsertNextValue(z)
+
+            polydata.GetPointData().SetScalars(z_scalars)  # Set Z as scalar data
+
             # Create a vtkDelaunay2D filter to generate the mesh
             delaunay = vtkDelaunay2D()
             delaunay.SetInputData(polydata)
             delaunay.Update()
 
+            # Optional: Apply a subdivision filter for higher-resolution mesh
+            subdivision_filter = vtkLoopSubdivisionFilter()
+            subdivision_filter.SetInputConnection(delaunay.GetOutputPort())
+            subdivision_filter.SetNumberOfSubdivisions(3)  # Adjust the number of subdivisions for smoother surface
+            subdivision_filter.Update()
+
+            # Apply smoothing filter (bicubic-like)
+            smooth_filter = vtkSmoothPolyDataFilter()
+            smooth_filter.SetInputConnection(subdivision_filter.GetOutputPort())  # Connect to subdivision filter
+            smooth_filter.SetNumberOfIterations(100)  # Increase for smoother results
+            smooth_filter.SetRelaxationFactor(0.01)  # Lower factor for smoother but less aggressive smoothing
+            smooth_filter.Update()
+
+            # Get min and max Z for color mapping (heatmap)
+            z_min, z_max = z_coords.min(), z_coords.max()
+
+            # Create a color lookup table (LUT) for heatmap colors
+            lut = vtkLookupTable()
+            lut.SetTableRange(z_min, z_max)
+            lut.SetHueRange(0.0, 0.67)  # From red to blue (heatmap style)
+            lut.Build()
+
+            # Create a mapper and set the input connection to the smoothed surface
+            mapper = vtkPolyDataMapper()
+            mapper.SetInputConnection(smooth_filter.GetOutputPort())
+            mapper.SetLookupTable(lut)
+            mapper.SetScalarRange(z_min, z_max)
+            mapper.ScalarVisibilityOn()
+
             # Apply mesh transformations
-            x_offset = self.mesh_x_offset+(x_max-x_min)/2
-            y_offset = self.mesh_y_offset+(y_max-y_min)/2
+            x_offset = self.mesh_x_offset
+            y_offset = self.mesh_y_offset
             z_offset = self.mesh_z_offset
 
             mesh_transform = vtkTransform()
             mesh_transform.Translate(x_offset, y_offset, z_offset)
 
-            # Create a mapper and set the input connection
-            mapper = vtkPolyDataMapper()
-            mapper.SetInputConnection(delaunay.GetOutputPort())
-
+            # Apply the transformations and set the mapper
             self.SetUserTransform(mesh_transform)
             self.SetMapper(mapper)
             self.GetProperty().SetPointSize(10)
+            sm_opacity = 1-getSetting('backplot.surface-map-transparency').value/100
+            print(f"opacity: {sm_opacity}")
+            self.GetProperty().SetOpacity(sm_opacity)  # Set transparency (0.0 = fully transparent, 1.0 = fully opaque)
 
         else:
-            self.log.info("HIDE POINTS SURFACE ")
+            self.log.info("HIDE POINTS SURFACE")
 
 
 

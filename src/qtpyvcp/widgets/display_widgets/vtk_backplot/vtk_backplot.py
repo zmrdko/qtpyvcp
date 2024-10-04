@@ -1920,6 +1920,11 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
         self.points_surface_actor.showSurface(surface)
         self.renderer_window.Render()
 
+    @Slot()
+    def getSurfaceSettingValue(self):
+        val = getSetting('backplot.show-points-surface').value
+        print(f'backplot.show-points-surface:{val}')
+
     @Slot(bool)
     @Slot(object)
     def showGrid(self, grid):
