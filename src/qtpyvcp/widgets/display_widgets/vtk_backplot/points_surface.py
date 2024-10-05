@@ -114,6 +114,8 @@ class PointsSurfaceActor(vtkActor):
     def showSurface(self, show_surface):
 
         if show_surface:
+
+            self.VisibilityOn()
             self.log.info("SHOW POINTS SURFACE")
             self.load_probe_results('probe-results.txt')
 
@@ -203,6 +205,7 @@ class PointsSurfaceActor(vtkActor):
             self.GetProperty().SetOpacity(sm_opacity)  # Set transparency (0.0 = fully transparent, 1.0 = fully opaque)
 
         else:
+            self.VisibilityOff()
             self.log.info("HIDE POINTS SURFACE")
 
 
