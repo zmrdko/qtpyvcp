@@ -8,6 +8,7 @@ from vtk import (
     vtkPolyData,
     vtkDelaunay2D,
     vtkSmoothPolyDataFilter,
+    vtkLinearSubdivisionFilter,
     vtkTransform
 )
 
@@ -160,7 +161,7 @@ class PointsSurfaceActor(vtkActor):
             delaunay.Update()
 
             # Optional: Apply a subdivision filter for higher-resolution mesh
-            subdivision_filter = vtkLoopSubdivisionFilter()
+            subdivision_filter = vtkLinearSubdivisionFilter()
             subdivision_filter.SetInputConnection(delaunay.GetOutputPort())
             subdivision_filter.SetNumberOfSubdivisions(3)  # Adjust the number of subdivisions for smoother surface
             subdivision_filter.Update()
@@ -169,7 +170,7 @@ class PointsSurfaceActor(vtkActor):
             smooth_filter = vtkSmoothPolyDataFilter()
             smooth_filter.SetInputConnection(subdivision_filter.GetOutputPort())  # Connect to subdivision filter
             smooth_filter.SetNumberOfIterations(100)  # Increase for smoother results
-            smooth_filter.SetRelaxationFactor(0.01)  # Lower factor for smoother but less aggressive smoothing
+            smooth_filter.SetRelaxationFactor(0.5)  # Lower factor for smoother but less aggressive smoothing
             smooth_filter.Update()
 
             # Get min and max Z for color mapping (heatmap)
