@@ -2062,7 +2062,7 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
 
     def changeSurfaceMapTransparency(self, value):
         print(value)
-        self.points_surface_actor.GetProperty().SetOpacity(value)
+        self.points_surface_actor.GetProperty().SetOpacity(value/100)
 
 
     @Property(QColor)
