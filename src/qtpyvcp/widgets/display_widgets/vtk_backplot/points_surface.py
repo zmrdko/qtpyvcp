@@ -54,6 +54,10 @@ class PointsSurfaceActor(vtkActor):
         self._datasource = datasource
 
         self.probe_results = []
+
+
+
+
         # self.axis = self._datasource.getAxis()
         # show_surface = getSetting('backplot.show-points-surface')
         # self.showSurface(show_surface and show_surface.value)

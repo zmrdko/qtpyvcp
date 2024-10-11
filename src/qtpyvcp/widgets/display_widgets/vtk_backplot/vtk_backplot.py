@@ -349,6 +349,7 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
             connectSetting('backplot.view', self.setView)
             connectSetting('backplot.multitool-colors', self.showMultiColorPath)
             connectSetting('backplot.show-machine-model', self.showMachine)
+            connectSetting('backplot.surface-map-transparency', self.changeSurfaceMapTransparency)
 
 
             self.path_colors = {'traverse': self._traverse_color,
@@ -1917,7 +1918,9 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
     @Slot(object)
     def showSurface(self, surface):
         LOG.debug('show surface')
+
         self.points_surface_actor.showSurface(surface)
+
         self.renderer_window.Render()
 
     @Slot()
@@ -2056,6 +2059,10 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
             self.hide_all_parts(self.machine_parts_actor)
 
         self.renderer_window.Render()
+
+    def changeSurfaceMapTransparency(self, value):
+        print(value)
+        self.points_surface_actor.GetProperty().SetOpacity(value)
 
 
     @Property(QColor)
