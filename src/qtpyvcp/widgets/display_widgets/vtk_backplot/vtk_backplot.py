@@ -73,6 +73,7 @@ NUMBER_OF_WCS = 9
 from qtpy.QtOpenGL import QGLFormat
 f = QGLFormat()
 f.setSampleBuffers(True)
+f.setSamples(8)  # Request 8x antialiasing (adjustable)
 QGLFormat.setDefaultFormat(f)
 
 
@@ -269,10 +270,12 @@ class VTKBackPlot(QVTKRenderWindowInteractor, VCPWidget, BaseBackPlot):
             self.clipping_range_far = 1000.0 #TODO: check this value
 
         self.camera.SetClippingRange(self.clipping_range_near, self.clipping_range_far)
+        #self.camera.SetUseAntialiasing(True)  # VTK 9.x+
         self.renderer = vtk.vtkRenderer()
         self.renderer.SetActiveCamera(self.camera)
 
         self.renderer_window = self.GetRenderWindow()
+        self.renderer_window.SetMultiSamples(8)  # Enable 8x multisampling for antialiasing
         self.renderer_window.AddRenderer(self.renderer)
 
         # self.nav_style = vtk.vtkInteractorStyleTrackballCamera()
